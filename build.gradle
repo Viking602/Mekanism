@@ -56,7 +56,7 @@ ext {
     disableCrT = true
     disableTOP = true
     disableEMI = true
-    disableProjectE = true
+    disableProjectE = false
 }
 
 sourceSets {
@@ -564,7 +564,7 @@ dependencies {
     compileOnly("dev.gigaherz.jsonthings:JsonThings-${minecraft_version}:${json_things_version}")
 
     //Mods we have dependencies on but don't bother loading into the dev environment
-    compileOnly("curse.maven:projecte-api-226410:${projecte_api_id}")
+    compileOnly(files('../ProjectE/build/libs/ProjectE-26.1.2-1.1.0-viking602.3.jar'))
     compileOnly("top.theillusivec4.curios:curios-neoforge:${curios_version}:api")
     compileOnly("com.blamejared.recipestages:RecipeStages:${recipe_stages_version}")
     compileOnly("cc.tweaked:cc-tweaked-${minecraft_version}-forge-api:${cc_tweaked_version}")
@@ -608,10 +608,17 @@ def getManifestAttributes(String title) {
 }
 
 tasks.named('jar', Jar) {
+    // Keep the existing API version required exactly by AppMek/MoreMachine.
+    // Identify source fixes without breaking add-ons that require the exact API version.
+    archiveClassifier.set('projecte.1.heat.1.energy.3')
     duplicatesStrategy = DuplicatesStrategy.FAIL
     from([sourceSets.api.output, sourceSets.main.output])
     exclude('crafttweaker_parameter_names.json')
     manifest.attributes(getManifestAttributes('Mekanism'))
+    manifest.attributes('Viking602-Integration-Patch': 'projecte.1')
+    manifest.attributes('Viking602-Heat-Persistence-Fix': '1')
+    manifest.attributes('Viking602-Energy-Connections-Fix': '2')
+    manifest.attributes('Viking602-Jade-Energy-Style-Fix': '1')
 }
 
 tasks.named('sourcesJar', Jar) {
@@ -673,6 +680,13 @@ tasks.withType(JavaCompile).configureEach({
     options.encoding = 'UTF-8'
     options.compilerArgs.addAll(['-Xmaxerrs', '100000'])
 })
+
+// Keep the upstream copyright and MIT terms with every viking602 binary.
+tasks.withType(Jar).configureEach {
+    from(layout.projectDirectory.file('LICENSE')) {
+        into('META-INF/licenses/mekanism')
+    }
+}
 
 tasks.withType(Javadoc).configureEach({
     options.encoding = 'UTF-8'

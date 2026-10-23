@@ -95,6 +95,20 @@ public class TileEntityEnergyCube extends TileEntityConfigurableMachine {
 
     @Override
     protected boolean onUpdateServer(ServerLevel level) {
+        // Legacy default creative items had zero energy but an output face. Restore their supply mode;
+        // deliberately configured all-input creative cubes remain energy voids.
+        if (tier == EnergyCubeTier.CREATIVE && energyContainer.isEmpty()) {
+            ConfigInfo energyConfig = configComponent.getConfig(TransmissionType.ENERGY);
+            if (energyConfig != null) {
+                for (var side : EnumUtils.SIDES) {
+                    var slot = energyConfig.getSlotInfo(side);
+                    if (slot != null && slot.canOutput()) {
+                        energyContainer.setEnergy(energyContainer.getCapacityAsLong(), null);
+                        break;
+                    }
+                }
+            }
+        }
         boolean sendUpdatePacket = super.onUpdateServer(level);
         chargeSlot.drainContainerIntoSlot(null);
         dischargeSlot.fillContainerOrConvert(null);

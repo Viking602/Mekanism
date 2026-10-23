@@ -156,6 +156,7 @@ public class Mekanism {
     private ReloadListener recipeCacheManager;
 
     public Mekanism(ModContainer modContainer, IEventBus modEventBus) {
+        mekanism.common.integration.LegacyIrisCompatibility.register();
         instance = this;
         //Set our version number to match the neoforge.mods.toml file, which matches the one in our build.gradle
         versionNumber = new Version(modContainer);

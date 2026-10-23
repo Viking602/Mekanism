@@ -3159,5 +3159,7 @@
   "upgrade.mekanism.stone_generator": "Stone Generator",
   "upgrade.mekanism.stone_generator.description": "Generates stone or cobblestone as needed.",
   "waste_barrel.mekanism.decay_rate": "Decay Rate: %1$s mB/t",
-  "waste_barrel.mekanism.decay_rate.actual": "Actual Decay Rate: %1$s mB / %2$s ticks"
+  "waste_barrel.mekanism.decay_rate.actual": "Actual Decay Rate: %1$s mB / %2$s ticks",
+  "block.mekanism.creative_energy_cube.source": " (Infinite Supply)",
+  "block.mekanism.creative_energy_cube.sink": " (Energy Void)"
 }

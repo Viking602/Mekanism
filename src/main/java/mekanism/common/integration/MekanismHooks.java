@@ -9,6 +9,7 @@ import mekanism.common.integration.curios.CuriosIntegration;
 import mekanism.common.integration.framedblocks.FramedBlocksIntegration;
 import mekanism.common.integration.gender.MekanismGenderArmor;
 import mekanism.common.integration.jsonthings.JsonThingsIntegration;
+import mekanism.common.integration.projecte.MekanismNormalizedSimpleStacks;
 import mekanism.common.recipe.bin.BinInsertRecipe;
 import mekanism.common.registries.MekanismItems;
 import net.minecraft.resources.Identifier;
@@ -90,10 +91,9 @@ public final class MekanismHooks {
         if (jsonThings.isLoaded()) {
             JsonThingsIntegration.hook(modEventBus);
         }
-        //TODO - 26.1: projectE
-        //if (projecte.isLoaded()) {
-        //    MekanismNormalizedSimpleStacks.NSS_SERIALIZERS.register(modEventBus);
-        //}
+        if (projecte.isLoaded()) {
+            MekanismNormalizedSimpleStacks.NSS_SERIALIZERS.register(modEventBus);
+        }
         if (framedBlocks.isLoaded()) {
             FramedBlocksIntegration.init(modEventBus);
         }

@@ -3237,5 +3237,7 @@
   "upgrade.mekanism.stone_generator": "造石机",
   "upgrade.mekanism.stone_generator.description": "按需生成石头或圆石。",
   "waste_barrel.mekanism.decay_rate": "衰变速率：%1$smB/t",
-  "waste_barrel.mekanism.decay_rate.actual": "实际衰变速率：%1$smB/%2$stick数"
+  "waste_barrel.mekanism.decay_rate.actual": "实际衰变速率：%1$smB/%2$stick数",
+  "block.mekanism.creative_energy_cube.source": "（无限供能）",
+  "block.mekanism.creative_energy_cube.sink": "（能量消除）"
 }

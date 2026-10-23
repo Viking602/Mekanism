@@ -9,14 +9,18 @@ import mekanism.common.registries.MekanismBlocks;
 import mekanism.common.tests.MekanismTests;
 import mekanism.common.tests.helpers.TransmitterTestHelper;
 import mekanism.common.tests.util.StructureBuilderUtils;
+import mekanism.common.tile.transmitter.TileEntityLogisticalTransporterBase;
+import mekanism.common.content.transporter.TransporterStack;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BarrelBlockEntity;
 import net.minecraft.world.level.block.entity.RandomizableContainerBlockEntity;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
+import net.minecraft.world.phys.AABB;
 import net.neoforged.testframework.DynamicTest;
 import net.neoforged.testframework.annotation.ForEachTest;
 import net.neoforged.testframework.annotation.RegisterStructureTemplate;
@@ -244,19 +248,38 @@ public class InventoryNetworkTest {
               .fill(0, 0, 2, 0, 0, 4, MekanismBlocks.BASIC_LOGISTICAL_TRANSPORTER.defaultState())
         );
 
-        test.onGameTest(TransmitterTestHelper.class, helper -> helper.startSequence()
-              //Wait a few seconds for it to pull some items out, and remove the transporter to the shorter destination
-              .thenExecuteAfter(4 * SharedConstants.TICKS_PER_SECOND, () -> helper.setBlock(1, 0, 2, Blocks.AIR.defaultBlockState()))
-              //Validate original destination has expected count
-              .thenExecute(() -> helper.assertContainerContains(2, 0, 2, Items.STONE, 2))
-              //Validate that two items were dropped when the transporter was broken
-              .thenExecute(() -> helper.assertItemEntityCountIs(Items.STONE, new BlockPos(1, 0, 2), 1, 2))
-              //Validate new destination has expected count after we give some time for the items to transfer
-              .thenExecuteAfter(11 * SharedConstants.TICKS_PER_SECOND, () -> helper.assertContainerContains(0, 0, 5, Items.STONE, 16))
-              //Validate start is also empty
-              .thenExecute(() -> helper.assertContainerEmpty(0, 0, 0))
-              .thenSucceed()
-        );
+        test.onGameTest(TransmitterTestHelper.class, helper -> {
+            // Arrival at a particular tick depends on block-entity tick order.
+            // Capture the actual split, then check conservation and rerouting.
+            int[] deliveredAndDropped = new int[2];
+            helper.startSequence()
+                  .thenExecuteAfter(4 * SharedConstants.TICKS_PER_SECOND, () -> {
+                      deliveredAndDropped[0] = helper.getBlockEntity(2, 0, 2, BarrelBlockEntity.class).countItem(Items.STONE);
+                      deliveredAndDropped[1] = helper.getBlockEntity(1, 0, 2, TileEntityLogisticalTransporterBase.class)
+                            .getTransmitter().getTransit().stream().mapToInt(TransporterStack::size).sum();
+                      helper.assertTrue(deliveredAndDropped[0] > 0, "The closer destination must receive items before its path is removed");
+                      helper.assertTrue(deliveredAndDropped[1] > 0, "The removed transporter must contain items in transit");
+                      helper.assertContainerEmpty(0, 0, 5);
+                      helper.setBlock(1, 0, 2, Blocks.AIR.defaultBlockState());
+                  })
+                  .thenExecute(() -> {
+                      // Dropped items may be merged into one entity. Count items,
+                      // rather than treating entity count as item count.
+                      int dropped = helper.getLevel().getEntitiesOfClass(ItemEntity.class,
+                            new AABB(helper.absolutePos(new BlockPos(1, 0, 2))).inflate(1),
+                            entity -> entity.getItem().is(Items.STONE)).stream().mapToInt(entity -> entity.getItem().getCount()).sum();
+                      helper.assertTrue(dropped == deliveredAndDropped[1], "The removed transporter must drop exactly its contents: " + dropped);
+                      helper.assertContainerContains(2, 0, 2, Items.STONE, deliveredAndDropped[0]);
+                  })
+                  .thenExecuteAfter(11 * SharedConstants.TICKS_PER_SECOND, () -> {
+                      helper.assertContainerContains(0, 0, 5, Items.STONE, 20 - deliveredAndDropped[0] - deliveredAndDropped[1]);
+                      helper.assertContainerContains(2, 0, 2, Items.STONE, deliveredAndDropped[0]);
+                      helper.assertContainerEmpty(0, 0, 0);
+                      System.out.println("viking602 transporter conservation: " + deliveredAndDropped[0] + " delivered before removal, " +
+                                         deliveredAndDropped[1] + " dropped, " + (20 - deliveredAndDropped[0] - deliveredAndDropped[1]) + " rerouted");
+                  })
+                  .thenSucceed();
+        });
     }
 
     @GameTest(timeoutTicks = 15 * SharedConstants.TICKS_PER_SECOND)
@@ -274,17 +297,8 @@ public class InventoryNetworkTest {
               .fill(0, 0, 2, 0, 0, 4, MekanismBlocks.BASIC_LOGISTICAL_TRANSPORTER.defaultState())
         );
 
-        test.onGameTest(TransmitterTestHelper.class, helper -> helper.startSequence()
-              //Wait a few seconds for it to pull some items out, and add a transporter to create a shorter destination
-              .thenExecuteAfter(4 * SharedConstants.TICKS_PER_SECOND, () -> helper.setBlock(1, 0, 2, MekanismBlocks.BASIC_LOGISTICAL_TRANSPORTER.defaultState()))
-              //Validate original destination has expected count
-              .thenExecuteAfter(10 * SharedConstants.TICKS_PER_SECOND, () -> helper.assertContainerContains(0, 0, 5, Items.STONE, 8))
-              //Validate new destination has expected count
-              .thenExecute(() -> helper.assertContainerContains(2, 0, 2, Items.STONE, 12))
-              //Validate start is also empty
-              .thenExecute(() -> helper.assertContainerEmpty(0, 0, 0))
-              .thenSucceed()
-        );
+        test.onGameTest(TransmitterTestHelper.class, helper -> assertNewShorterRoute(helper,
+              () -> helper.setBlock(1, 0, 2, MekanismBlocks.BASIC_LOGISTICAL_TRANSPORTER.defaultState())));
     }
 
     @GameTest(timeoutTicks = 15 * SharedConstants.TICKS_PER_SECOND)
@@ -305,17 +319,37 @@ public class InventoryNetworkTest {
               .set(1, 0, 2, MekanismBlocks.BASIC_LOGISTICAL_TRANSPORTER.defaultState(), StructureBuilderUtils.configured(null, Direction.WEST, ConnectionType.NONE))
         );
 
-        test.onGameTest(TransmitterTestHelper.class, helper -> helper.startSequence()
-              //Wait a few seconds for it to pull some items out, re-enable a disabled path to make there be a shorter destination
-              .thenExecuteAfter(4 * SharedConstants.TICKS_PER_SECOND, () -> helper.useConfigurator(1, 0, 2, Direction.WEST))
-              //Validate original destination has expected count
-              .thenExecuteAfter(10 * SharedConstants.TICKS_PER_SECOND, () -> helper.assertContainerContains(0, 0, 5, Items.STONE, 8))
-              //Validate new destination has expected count
-              .thenExecute(() -> helper.assertContainerContains(2, 0, 2, Items.STONE, 12))
-              //Validate start is also empty
-              .thenExecute(() -> helper.assertContainerEmpty(0, 0, 0))
-              .thenSucceed()
-        );
+        test.onGameTest(TransmitterTestHelper.class, helper -> assertNewShorterRoute(helper,
+              () -> helper.useConfigurator(1, 0, 2, Direction.WEST)));
+    }
+
+    private static int countCommittedTo(TransmitterTestHelper helper, BlockPos pullPos, BlockPos destination) {
+        var network = helper.getBlockEntity(pullPos.getX(), pullPos.getY(), pullPos.getZ(), TileEntityLogisticalTransporterBase.class)
+              .getTransmitter().getTransmitterNetwork();
+        helper.assertTrue(network != null, "The inventory network must exist before changing its route");
+        long absoluteDestination = helper.absolutePos(destination).asLong();
+        return helper.getBlockEntity(destination.getX(), destination.getY(), destination.getZ(), BarrelBlockEntity.class).countItem(Items.STONE)
+              + network.getTransmitters().stream().flatMap(transmitter -> transmitter.getTransit().stream())
+              .filter(stack -> stack.hasPath() && stack.getPath().getLong(0) == absoluteDestination)
+              .mapToInt(TransporterStack::size).sum();
+    }
+
+    private static void assertNewShorterRoute(TransmitterTestHelper helper, Runnable changeRoute) {
+        int[] committedToOriginal = new int[1];
+        helper.startSequence()
+              .thenExecuteAfter(4 * SharedConstants.TICKS_PER_SECOND, () -> {
+                  committedToOriginal[0] = countCommittedTo(helper, new BlockPos(0, 0, 1), new BlockPos(0, 0, 5));
+                  helper.assertTrue(committedToOriginal[0] > 0 && committedToOriginal[0] < 20,
+                        "Changing the route must happen with committed and unpulled items remaining");
+                  helper.assertContainerEmpty(2, 0, 2);
+                  changeRoute.run();
+              })
+              .thenWaitUntil(() -> {
+                  helper.assertContainerContains(0, 0, 5, Items.STONE, committedToOriginal[0]);
+                  helper.assertContainerContains(2, 0, 2, Items.STONE, 20 - committedToOriginal[0]);
+                  helper.assertContainerEmpty(0, 0, 0);
+              })
+              .thenSucceed();
     }
 
     @GameTest
@@ -426,17 +460,7 @@ public class InventoryNetworkTest {
     @TestHolder(description = "Tests that newly pulled items will go to the destination that had its path upgraded, "
                               + "but any items that were already en-route will continue to the destination they had already calculated.")
     public static void upgradeFurtherPath(final TransmitterTestHelper helper) {
-        helper.startSequence()
-              //Wait a few seconds for it to pull some items out, and upgrade the transporter to the further destination
-              .thenExecuteAfter(4 * SharedConstants.TICKS_PER_SECOND, () -> helper.applyAlloyUpgrade(new BlockPos(9, 0, 0), AlloyTier.INFUSED))
-              //Wait a few seconds for transferring to happen then validate stuff
-              //Validate original destination has expected count
-              .thenExecuteAfter(13 * SharedConstants.TICKS_PER_SECOND, () -> helper.assertContainerContains(2, 0, 0, Items.STONE, 8))
-              //Validate further but now "closer" destination has expected count
-              .thenExecute(() -> helper.assertContainerContains(8, 0, 0, Items.STONE, 12))
-              //Validate start is also empty
-              .thenExecute(() -> helper.assertContainerEmpty(3, 0, 0))
-              .thenSucceed();
+        assertUpgradeReroutesOnlyNewItems(helper, new BlockPos(9, 0, 0));
     }
 
     @GameTest(template = UPGRADEABLE, timeoutTicks = 20 * SharedConstants.TICKS_PER_SECOND)
@@ -444,16 +468,30 @@ public class InventoryNetworkTest {
                               + "but any items that were already en-route will continue to the destination they had "
                               + "already calculated as the new destination is slightly \"closer\".")
     public static void upgradeFurtherOverlapping(final TransmitterTestHelper helper) {
+        assertUpgradeReroutesOnlyNewItems(helper, new BlockPos(6, 0, 2));
+    }
+
+    private static void assertUpgradeReroutesOnlyNewItems(TransmitterTestHelper helper, BlockPos upgradePos) {
+        int[] committedToOriginal = new int[1];
         helper.startSequence()
-              //Wait a few seconds for it to pull some items out, and upgrade the transporter to the further destination
-              .thenExecuteAfter(4 * SharedConstants.TICKS_PER_SECOND, () -> helper.applyAlloyUpgrade(new BlockPos(6, 0, 2), AlloyTier.INFUSED))
-              //Wait a few seconds for transferring to happen then validate stuff
-              //Validate original destination has expected count
-              .thenExecuteAfter(13 * SharedConstants.TICKS_PER_SECOND, () -> helper.assertContainerContains(2, 0, 0, Items.STONE, 8))
-              //Validate further but now "closer" destination has expected count
-              .thenExecute(() -> helper.assertContainerContains(8, 0, 0, Items.STONE, 12))
-              //Validate start is also empty
-              .thenExecute(() -> helper.assertContainerEmpty(3, 0, 0))
+              .thenExecuteAfter(4 * SharedConstants.TICKS_PER_SECOND, () -> {
+                  //The number pulled by this tick depends on tick phase. Preserve the actual commitments instead of assuming eight.
+                  //Pause new pulls while the upgraded network rebuilds, so the snapshot and the changed route have a definite boundary.
+                  helper.getBlockEntity(3, 0, 1, TileEntityLogisticalTransporterBase.class).getTransmitter()
+                        .setConnectionTypeRaw(Direction.NORTH, ConnectionType.NORMAL);
+                  committedToOriginal[0] = countCommittedTo(helper, new BlockPos(3, 0, 1), new BlockPos(2, 0, 0));
+                  helper.assertTrue(committedToOriginal[0] > 0 && committedToOriginal[0] < 20,
+                        "The upgrade must happen with both committed and unpulled items remaining");
+                  helper.assertContainerEmpty(8, 0, 0);
+                  helper.applyAlloyUpgrade(upgradePos, AlloyTier.INFUSED);
+              })
+              .thenExecuteAfter(2, () -> helper.getBlockEntity(3, 0, 1, TileEntityLogisticalTransporterBase.class).getTransmitter()
+                    .setConnectionTypeRaw(Direction.NORTH, ConnectionType.PULL))
+              .thenWaitUntil(() -> {
+                  helper.assertContainerContains(2, 0, 0, Items.STONE, committedToOriginal[0]);
+                  helper.assertContainerContains(8, 0, 0, Items.STONE, 20 - committedToOriginal[0]);
+                  helper.assertContainerEmpty(3, 0, 0);
+              })
               .thenSucceed();
     }
 
@@ -498,16 +536,27 @@ public class InventoryNetworkTest {
               .set(0, 1, 2, Blocks.LEVER.defaultBlockState())
         );
 
-        test.onGameTest(TransmitterTestHelper.class, helper -> helper.startSequence()
-              //Wait a few seconds for it to pull some items out, and remove the transporter to the shorter destination
-              .thenExecuteAfter(4 * SharedConstants.TICKS_PER_SECOND, () -> helper.pullLever(0, 1, 2))
-              //Validate original destination has expected count
-              .thenExecuteAfter(11 * SharedConstants.TICKS_PER_SECOND, () -> helper.assertContainerContains(0, 0, 5, Items.STONE, 4))
-              //Validate new destination has expected count after we give some time for the items to transfer
-              .thenExecute(() -> helper.assertContainerContains(2, 0, 2, Items.STONE, 16))
-              //Validate start is also empty
-              .thenExecute(() -> helper.assertContainerEmpty(0, 0, 0))
-              .thenSucceed()
-        );
+        test.onGameTest(TransmitterTestHelper.class, helper -> {
+            int[] beyondDiversion = new int[1];
+            helper.startSequence()
+                  .thenExecuteAfter(4 * SharedConstants.TICKS_PER_SECOND, () -> {
+                      //Only items already past the junction can keep reaching the original destination.
+                      beyondDiversion[0] = helper.getBlockEntity(0, 0, 5, BarrelBlockEntity.class).countItem(Items.STONE);
+                      for (int z = 3; z <= 4; z++) {
+                          beyondDiversion[0] += helper.getBlockEntity(0, 0, z, TileEntityLogisticalTransporterBase.class)
+                                .getTransmitter().getTransit().stream().mapToInt(TransporterStack::size).sum();
+                      }
+                      helper.assertTrue(beyondDiversion[0] > 0 && beyondDiversion[0] < 20,
+                            "Switching the junction must leave items on both sides of it");
+                      helper.assertContainerEmpty(2, 0, 2);
+                      helper.pullLever(0, 1, 2);
+                  })
+                  .thenWaitUntil(() -> {
+                      helper.assertContainerContains(0, 0, 5, Items.STONE, beyondDiversion[0]);
+                      helper.assertContainerContains(2, 0, 2, Items.STONE, 20 - beyondDiversion[0]);
+                      helper.assertContainerEmpty(0, 0, 0);
+                  })
+                  .thenSucceed();
+        });
     }
 }

@@ -88,6 +88,8 @@ public class MekanismLangProvider extends BaseLanguageProvider {
 
     @Override
     protected void addTranslations() {
+        add("block.mekanism.creative_energy_cube.source", " (Infinite Supply)");
+        add("block.mekanism.creative_energy_cube.sink", " (Energy Void)");
         addConfigs();
         addTags();
         addItems();

@@ -4,6 +4,7 @@ import com.mojang.math.Transformation;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -58,13 +59,15 @@ public class TransmitterBlockStateModel implements DynamicBlockStateModel {
           .collect(Collectors.toSet());
 
     private final PartStorage baseParts;
+    private final BlockStateModelPart[] terminalParts;
     @Nullable
     private final PartStorage glassParts;
     private final Material.Baked particleMaterial;
     private final int materialFlags;
 
-    private TransmitterBlockStateModel(PartStorage baseParts, @Nullable PartStorage glassParts, Material.Baked particleMaterial, int materialFlags) {
+    private TransmitterBlockStateModel(PartStorage baseParts, BlockStateModelPart[] terminalParts, @Nullable PartStorage glassParts, Material.Baked particleMaterial, int materialFlags) {
         this.baseParts = baseParts;
+        this.terminalParts = terminalParts;
         this.glassParts = glassParts;
         this.particleMaterial = particleMaterial;
         this.materialFlags = materialFlags;
@@ -96,6 +99,9 @@ public class TransmitterBlockStateModel implements DynamicBlockStateModel {
             Direction direction = EnumUtils.DIRECTIONS[i];
             VisualConnectionStatus connectionType = transmitterModelData.getConnectionType(i);
             addPart(baseParts, parts, direction, connectionType);
+            if (transmitterModelData.hasTerminal(direction)) {
+                parts.add(terminalParts[i]);
+            }
             //Skip rendering the glass if we don't actually have any glass, or we don't have a color for it:
             if (needsGlass) {
                 addPart(Objects.requireNonNull(glassParts), parts, direction, connectionType);
@@ -206,7 +212,11 @@ public class TransmitterBlockStateModel implements DynamicBlockStateModel {
                 }
             }
 
-            return new TransmitterBlockStateModel(baseParts, glassParts, baseModel.resolveParticleMaterial(baseModel.getTopTextureSlots(), modelBakery), materialFlags);
+            var terminalParts = new BlockStateModelPart[EnumUtils.DIRECTIONS.length];
+            for (Direction direction : EnumUtils.DIRECTIONS) {
+                terminalParts[direction.ordinal()] = makeTerminalPart(Objects.requireNonNull(baseParts.get(direction, VisualConnectionStatus.NONE)), direction);
+            }
+            return new TransmitterBlockStateModel(baseParts, terminalParts, glassParts, baseModel.resolveParticleMaterial(baseModel.getTopTextureSlots(), modelBakery), materialFlags);
         }
 
         private static Transformation makeIconStatusTransform(Direction direction) {
@@ -221,6 +231,46 @@ public class TransmitterBlockStateModel implements DynamicBlockStateModel {
             if (glass != null) {
                 resolver.markDependency(glass);
             }
+        }
+    }
+
+    private static BlockStateModelPart makeTerminalPart(BlockStateModelPart centerFace, Direction direction) {
+        // Reuse the cable's own end texture and material, moved from its 6/16-wide core to the device boundary.
+        Vector3f offset = direction.getUnitVec3f().mul(5 / 16F, new Vector3f());
+        var quads = new ArrayList<BakedQuad>();
+        var source = new ArrayList<>(centerFace.getQuads(null));
+        for (Direction side : EnumUtils.DIRECTIONS) {
+            source.addAll(centerFace.getQuads(side));
+        }
+        for (BakedQuad quad : source) {
+            quads.add(new BakedQuad(new Vector3f(quad.position0()).add(offset), new Vector3f(quad.position1()).add(offset),
+                  new Vector3f(quad.position2()).add(offset), new Vector3f(quad.position3()).add(offset),
+                  quad.packedUV0(), quad.packedUV1(), quad.packedUV2(), quad.packedUV3(), quad.direction(), quad.materialInfo(),
+                  quad.bakedNormals(), quad.bakedColors()));
+        }
+        return new TerminalPart(List.copyOf(quads), centerFace);
+    }
+
+    private record TerminalPart(List<BakedQuad> quads, BlockStateModelPart delegate) implements BlockStateModelPart {
+        @Override
+        public List<BakedQuad> getQuads(@Nullable Direction side) {
+            // Small devices do not cover the entire mouth. Never let their occlusion shape hide the exposed rim.
+            return side == null ? quads : List.of();
+        }
+
+        @Override
+        public boolean useAmbientOcclusion() {
+            return delegate.useAmbientOcclusion();
+        }
+
+        @Override
+        public Material.Baked particleMaterial() {
+            return delegate.particleMaterial();
+        }
+
+        @Override
+        public int materialFlags() {
+            return delegate.materialFlags();
         }
     }
 

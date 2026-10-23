@@ -5,24 +5,36 @@ import java.util.Optional;
 import mekanism.api.SerializationConstants;
 import mekanism.client.render.IFancyFontRenderer.TextAlignment;
 import mekanism.common.integration.lookingat.ILookingAtElement;
+import mekanism.common.integration.lookingat.EnergyElement;
 import mekanism.common.integration.lookingat.LookingAtElement;
 import mekanism.common.integration.lookingat.LookingAtElementType;
 import mekanism.common.integration.lookingat.TextElement;
+import mekanism.common.tile.base.TileEntityUpdateable;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.CommonColors;
+import net.minecraft.util.Mth;
 import org.jspecify.annotations.Nullable;
 import snownee.jade.api.Accessor;
+import snownee.jade.api.BlockAccessor;
 import snownee.jade.api.IComponentProvider;
 import snownee.jade.api.ITooltip;
+import snownee.jade.api.JadeIds;
 import snownee.jade.api.config.IPluginConfig;
 import snownee.jade.api.ui.Element;
+import snownee.jade.api.ui.BoxStyle;
+import snownee.jade.api.ui.JadeUI;
+import snownee.jade.api.view.ProgressView;
 
 public class JadeTooltipRenderer<ACCESSOR extends Accessor<?>> implements IComponentProvider<ACCESSOR> {
 
     static final JadeTooltipRenderer<?> INSTANCE = new JadeTooltipRenderer<>();
+    private static final Element STANDARD_ENERGY_OVERLAY = JadeUI.horizontalTiledSprite(
+          RenderPipelines.GUI_TEXTURED, JadeIds.JADE("energy_progress"), 16, 16);
 
     @Override
     public Identifier getUid() {
@@ -36,12 +48,14 @@ public class JadeTooltipRenderer<ACCESSOR extends Accessor<?>> implements ICompo
             Optional<List<ILookingAtElement>> optionalElements = accessor.decodeFromNbt(LookingAtElementType.ELEMENT_LIST_STREAM_CODEC, tag);
             //noinspection OptionalIsPresent - Capturing lambda
             if (optionalElements.isPresent()) {
-                appendElements(tooltip, config, optionalElements.get());
+                boolean mekanismEnergyStyle = !(accessor instanceof BlockAccessor block)
+                      || block.getBlockEntity() instanceof TileEntityUpdateable;
+                appendElements(tooltip, config, optionalElements.get(), mekanismEnergyStyle);
             }
         }
     }
 
-    private void appendElements(ITooltip tooltip, IPluginConfig config, List<ILookingAtElement> elements) {
+    private void appendElements(ITooltip tooltip, IPluginConfig config, List<ILookingAtElement> elements, boolean mekanismEnergyStyle) {
         Component lastText = null;
         //Copy the data we need and have from the server and pass it on to the tooltip rendering
         for (ILookingAtElement element : elements) {
@@ -53,7 +67,16 @@ public class JadeTooltipRenderer<ACCESSOR extends Accessor<?>> implements ICompo
             } else {
                 Identifier name = element.getID();
                 if (config.get(name)) {
-                    tooltip.add(MekElement.create(lastText, (LookingAtElement) element).tag(name));
+                    if (!mekanismEnergyStyle && element instanceof EnergyElement energy) {
+                        // Foreign FE devices use Jade's native red striped bar, while keeping the
+                        // same long-valued snapshot, text (including infinity) and energy toggle.
+                        if (lastText != null) {
+                            tooltip.add(lastText);
+                        }
+                        tooltip.add(standardEnergy(energy).tag(name));
+                    } else {
+                        tooltip.add(MekElement.create(lastText, (LookingAtElement) element).tag(name));
+                    }
                 }
                 lastText = null;
             }
@@ -61,6 +84,13 @@ public class JadeTooltipRenderer<ACCESSOR extends Accessor<?>> implements ICompo
         if (lastText != null) {
             tooltip.add(lastText);
         }
+    }
+
+    private static Element standardEnergy(EnergyElement energy) {
+        float ratio = energy.getEnergy() == Long.MAX_VALUE ? 1 : energy.getMaxEnergy() > 0
+              ? Mth.clamp((float) (energy.getEnergy() / (double) energy.getMaxEnergy()), 0, 1) : 0;
+        return JadeUI.progress(new ProgressView(ProgressView.Part.of(ratio, STANDARD_ENERGY_OVERLAY),
+              energy.getText().copy().withStyle(ChatFormatting.WHITE), JadeUI.progressStyle(), BoxStyle.nestedBox()));
     }
 
     private static class MekElement extends Element {

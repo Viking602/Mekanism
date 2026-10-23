@@ -429,7 +429,8 @@ public abstract class Transmitter<ACCEPTOR, NETWORK extends DynamicNetwork<ACCEP
 
     /// @return true if the model data was changed by this update
     public boolean handleUpdateTag(ValueInput input) {
-        boolean refreshModelData = false;
+        byte oldTransmitters = currentTransmitterConnections;
+        byte oldAcceptors = acceptorCache.currentAcceptorConnections;
         ConnectionType[] oldConnectionData = new ConnectionType[EnumUtils.DIRECTIONS.length];
         for (Direction side : EnumUtils.DIRECTIONS) {
             oldConnectionData[side.ordinal()] = getConnectionType(side);
@@ -438,6 +439,9 @@ public abstract class Transmitter<ACCEPTOR, NETWORK extends DynamicNetwork<ACCEP
         currentTransmitterConnections = input.getByteOr(SerializationConstants.CURRENT_CONNECTIONS, currentTransmitterConnections);
         acceptorCache.currentAcceptorConnections = input.getByteOr(SerializationConstants.CURRENT_ACCEPTORS, acceptorCache.currentAcceptorConnections);
         readRawConnections(input);
+
+        // A device can replace another cable without changing NORMAL. Its end plate still needs a new model snapshot.
+        boolean refreshModelData = oldTransmitters != currentTransmitterConnections || oldAcceptors != acceptorCache.currentAcceptorConnections;
 
         for (Direction side : EnumUtils.DIRECTIONS) {
             //If the visible connection data changed, mark that we need to update the model data

@@ -12,6 +12,7 @@ public sealed class TransmitterModelData permits Diversion {
 
     private final VisualConnectionStatus[] connections = new VisualConnectionStatus[EnumUtils.DIRECTIONS.length];
     private boolean hasColor;
+    private byte terminalConnections;
 
     public void setConnectionData(ConnectionType[] connectionsIn) {
         for (int i = 0; i < EnumUtils.DIRECTIONS.length; i++) {
@@ -27,6 +28,15 @@ public sealed class TransmitterModelData permits Diversion {
         return connections[side.ordinal()];
     }
 
+    /** Device ports need an end plate; adjoining cable segments must remain open. */
+    public void setTerminalConnections(byte terminalConnections) {
+        this.terminalConnections = terminalConnections;
+    }
+
+    public boolean hasTerminal(Direction side) {
+        return connections[side.ordinal()] == VisualConnectionStatus.NORMAL && (terminalConnections & (1 << side.ordinal())) != 0;
+    }
+
     public void setHasColor(boolean hasColor) {
         this.hasColor = hasColor;
     }
@@ -40,13 +50,15 @@ public sealed class TransmitterModelData permits Diversion {
         if (o == this) {
             return true;
         }
-        return o instanceof TransmitterModelData other && hasColor == other.hasColor && Arrays.equals(connections, other.connections);
+        return o instanceof TransmitterModelData other && hasColor == other.hasColor && terminalConnections == other.terminalConnections &&
+              Arrays.equals(connections, other.connections);
     }
 
     @Override
     public int hashCode() {
         int result = Arrays.hashCode(connections);
         result = 31 * result + Boolean.hashCode(hasColor);
+        result = 31 * result + Byte.hashCode(terminalConnections);
         return result;
     }
 

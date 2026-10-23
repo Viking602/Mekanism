@@ -128,7 +128,7 @@ public class MekanismContentsProcessor implements IDataComponentProcessor {
     private static long addEmc(IEMCProxy emcProxy, @Range(from = 1, to = Long.MAX_VALUE) long currentEMC, List<LargeResourceStack<ItemResource>> slots) throws ArithmeticException {
         for (LargeResourceStack<ItemResource> slot : slots) {
             if (!slot.isEmpty()) {
-                long itemEmc = emcProxy.getValue(slot.resource().typeHolder());
+                long itemEmc = emcProxy.getValue(ItemInfo.fromItem(slot.resource().typeHolder(), slot.resource().getComponentsPatch()));
                 if (itemEmc == 0) {
                     return 0;
                 }

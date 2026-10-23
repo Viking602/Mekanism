@@ -38,6 +38,18 @@ public abstract class RenderTransmitterBase<TRANSMITTER extends TileEntityTransm
 
     public static void onStitch() {
         contentModelCache.clear();
+        TransmitterContentsModel.clear();
+    }
+
+    @Override
+    public void extractRenderState(TRANSMITTER tile, STATE state, float partialTick, Vec3 camera,
+          net.minecraft.client.renderer.feature.ModelFeatureRenderer.@org.jspecify.annotations.Nullable CrumblingOverlay overlay) {
+        super.extractRenderState(tile, state, partialTick, camera, overlay);
+        var connections = new ArrayList<String>(6);
+        for (Direction side : EnumUtils.DIRECTIONS) {
+            connections.add(side.getSerializedName() + tile.getTransmitter().getConnectionType(side).name());
+        }
+        state.connectionContents = List.copyOf(connections);
     }
 
     private static List<BakedQuad> getBakedQuads(List<String> visible, TextureAtlasSprite icon, Level world) {

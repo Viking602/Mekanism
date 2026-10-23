@@ -2,6 +2,7 @@ package mekanism.client.render.transmitter;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import mekanism.client.render.transmitter.TransmitterRenderState.CableRenderState;
+import mekanism.client.render.MekanismRenderer;
 import mekanism.common.base.ProfilerConstants;
 import mekanism.common.content.network.EnergyNetwork;
 import mekanism.common.content.network.transmitter.UniversalCable;
@@ -11,6 +12,8 @@ import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
 import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.util.ARGB;
+import net.minecraft.util.LightCoordsUtil;
 import org.jspecify.annotations.Nullable;
 
 public class RenderUniversalCable extends RenderTransmitterBase<TileEntityUniversalCable, CableRenderState> {
@@ -28,6 +31,7 @@ public class RenderUniversalCable extends RenderTransmitterBase<TileEntityUniver
     public void extractRenderState(TileEntityUniversalCable cable, CableRenderState state, float partialTick, Vec3 cameraPosition,
           ModelFeatureRenderer.@Nullable CrumblingOverlay breakProgress) {
         super.extractRenderState(cable, state, partialTick, cameraPosition, breakProgress);
+        state.currentScale = 0;
         EnergyNetwork network = cable.getTransmitter().getTransmitterNetwork();
         if (network == null) {//TODO - 26.1: Does this race condition still exist?
             return;//race conditions, yay
@@ -37,16 +41,8 @@ public class RenderUniversalCable extends RenderTransmitterBase<TileEntityUniver
 
     @Override
     public void submit(CableRenderState state, PoseStack poseStack, SubmitNodeCollector nodeCollector, CameraRenderState camera) {
-        //TODO - 26.1: What threshold do we want to cut this off at?
-        //todo - 26.1: rendering
-        /*if (state.currentScale > 0) {
-            poseStack.pushPose();
-            poseStack.translate(0.5, 0.5, 0.5);
-            renderModel(state, poseStack, renderer.getBuffer(Sheets.translucentCullBlockSheet()), CommonColors.WHITE, state.currentScale, LightCoordsUtil.FULL_BRIGHT,
-                  OverlayTexture.NO_OVERLAY, MekanismRenderer.energyIcon);
-
-            poseStack.popPose();
-        }*/
+        TransmitterContentsModel.submit(state, poseStack, nodeCollector, MekanismRenderer.getSinglePicker(MekanismRenderer.energyIcon),
+              ARGB.color(ARGB.as8BitChannel(state.currentScale), 255, 255, 255), LightCoordsUtil.FULL_BRIGHT);
     }
 
     @Override

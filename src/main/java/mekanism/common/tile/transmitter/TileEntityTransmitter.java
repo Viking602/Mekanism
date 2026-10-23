@@ -25,6 +25,7 @@ import mekanism.common.capabilities.resolver.BasicSidedCapabilityResolver;
 import mekanism.common.content.network.transmitter.BufferedTransmitter;
 import mekanism.common.content.network.transmitter.IUpgradeableTransmitter;
 import mekanism.common.content.network.transmitter.Transmitter;
+import mekanism.common.content.network.transmitter.UniversalCable;
 import mekanism.common.lib.transaction.TransactionHelper;
 import mekanism.common.lib.transmitter.ConnectionType;
 import mekanism.common.lib.transmitter.DynamicBufferedNetwork;
@@ -315,6 +316,9 @@ public abstract class TileEntityTransmitter extends CapabilityTileEntity impleme
             connections[side.ordinal()] = myTransmitter.getConnectionType(side);
         }
         modelData.setConnectionData(connections);
+        if (myTransmitter instanceof UniversalCable) {
+            modelData.setTerminalConnections((byte) (myTransmitter.getAcceptorCache().currentAcceptorConnections & ~myTransmitter.currentTransmitterConnections));
+        }
     }
 
     protected TransmitterModelData initModelData() {

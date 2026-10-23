@@ -150,7 +150,15 @@ public class EvaporationMultiblockData extends MultiblockData implements IValveH
         super.onCreated(world, transaction);
         biomeAmbientTemp = calculateAverageAmbientTemperature(world);
         // update the heat capacity now that we've read
-        heatCapacitor.updateHeatAndCapacity(MekanismConfig.general.evaporationHeatCapacity.get() * height(), transaction);
+        double capacity = MekanismConfig.general.evaporationHeatCapacity.get() * height();
+        double heat = heatCapacitor.getHeat();
+        if (heat > 0 && heat == heatCapacitor.getHeatCapacity()) {
+            //The first 26.1 port accidentally serialized heat into both fields. Recover the
+            //capacity from the validated tower height, retaining its existing stored heat.
+            heatCapacitor.setHeatAndCapacity(heat, capacity, transaction);
+        } else {
+            heatCapacitor.updateHeatAndCapacity(capacity, transaction);
+        }
         updateSolars(world);
     }
 

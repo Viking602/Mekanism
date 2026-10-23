@@ -64,11 +64,28 @@ public class ItemBlockEnergyCube extends ItemBlockTooltip<BlockEnergyCube> imple
     private final EnergyCubeTier tier;
 
     public ItemBlockEnergyCube(BlockEnergyCube block, Item.Properties properties) {
-        tier = Attribute.getTierNN(block, EnergyCubeTier.class);
-        super(block, true, properties
-              .component(MekanismDataComponents.EJECTOR, AttachedEjector.DEFAULT)
-              .component(MekanismDataComponents.SIDE_CONFIG, SIDE_CONFIG)
-        );
+        EnergyCubeTier cubeTier = Attribute.getTierNN(block, EnergyCubeTier.class);
+        tier = cubeTier;
+        super(block, true, defaultProperties(properties, cubeTier));
+    }
+
+    private static Item.Properties defaultProperties(Item.Properties properties, EnergyCubeTier tier) {
+        properties.component(MekanismDataComponents.EJECTOR, AttachedEjector.DEFAULT)
+              .component(MekanismDataComponents.SIDE_CONFIG, tier == EnergyCubeTier.CREATIVE ? ALL_OUTPUT : SIDE_CONFIG);
+        if (tier == EnergyCubeTier.CREATIVE) {
+            properties.component(MekanismDataComponents.ATTACHED_ENERGY, tier.getCapacity());
+        }
+        return properties;
+    }
+
+    @Override
+    public Component getName(ItemStack stack) {
+        Component name = super.getName(stack);
+        if (tier == EnergyCubeTier.CREATIVE) {
+            return name.copy().append(Component.translatable(stack.getOrDefault(MekanismDataComponents.ATTACHED_ENERGY, 0L) > 0
+                  ? "block.mekanism.creative_energy_cube.source" : "block.mekanism.creative_energy_cube.sink"));
+        }
+        return name;
     }
 
     @Override
@@ -109,9 +126,9 @@ public class ItemBlockEnergyCube extends ItemBlockTooltip<BlockEnergyCube> imple
     @Override
     public void addItems(Holder<Item> item, Consumer<ItemStack> tabOutput) {
         if (tier == EnergyCubeTier.CREATIVE) {
-            //Add the empty and charged variants
-            tabOutput.accept(withCreativeSideConfig(ALL_INPUT).toStack());
+            //The ordinary creative pick is a power source; expose the explicit void variant separately.
             tabOutput.accept(ContainerType.ENERGY.getFilledVariant(withCreativeSideConfig(ALL_OUTPUT), null));
+            tabOutput.accept(withCreativeSideConfig(ALL_INPUT).toStack());
         } else {
             tabOutput.accept(ContainerType.ENERGY.getFilledVariant(item, null));
         }
@@ -123,8 +140,9 @@ public class ItemBlockEnergyCube extends ItemBlockTooltip<BlockEnergyCube> imple
     }
 
     public static ItemResource withCreativeSideConfig(AttachedSideConfig config) {
-        return ItemResource.of(MekanismBlocks.CREATIVE_ENERGY_CUBE)
+        ItemResource resource = ItemResource.of(MekanismBlocks.CREATIVE_ENERGY_CUBE)
               .with(MekanismDataComponents.SIDE_CONFIG, config);
+        return ALL_INPUT.equals(config) ? resource.with(MekanismDataComponents.ATTACHED_ENERGY, 0L) : resource;
     }
 
     @Override

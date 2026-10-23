@@ -23,3 +23,8 @@ MDK.zip
 /logs
 /annotation-processor/bin
 libs/
+
+# Local project02 verification data and extracted inspection libraries.
+/port-initial-build.log
+/verification/*
+!/verification/*.py
